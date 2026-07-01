@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <service verb="get" noun="A1Q01NewCustomers">
+        <in-parameters/>
+        <out-parameters>
+            <parameter name="renderedSql"/>
+            <parameter name="parametersList" type="List"/>
+            <parameter name="resultList" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import org.moqui.entity.EntityCondition
+                import org.moqui.impl.entity.EntityFindImpl
+                import org.moqui.impl.entity.EntityFindBuilder
+                import org.moqui.impl.entity.EntityDefinition
+                import org.moqui.impl.entity.FieldInfo
+                import org.moqui.impl.entity.EntityJavaUtil.FieldOrderOptions
+                import org.moqui.impl.entity.condition.EntityConditionImplBase
+
+                def find = ec.entity.find("mantle.party.Person")
+                def dv = find.makeEntityDynamicView()
+                dv.addMemberEntity("PER", "mantle.party.Person", null, null, null)
+                dv.addMemberEntity("PR", "mantle.party.PartyRole", "PER", false, ["partyId":"partyId"])
+                dv.addAlias("PER", "partyId")
+                dv.addAlias("PER", "firstName")
+                dv.addAlias("PER", "lastName")
+                dv.addAlias("PER", "createdStamp")
+                dv.addAlias("PR", "roleTypeId")
+
+                find.condition("roleTypeId", "CUSTOMER")
+                // parseTimestamp was needed here, plain string wasnt working
+                find.condition("createdStamp", EntityCondition.GREATER_THAN_EQUAL_TO, ec.l10n.parseTimestamp("2023-06-01 00:00:00", "yyyy-MM-dd HH:mm:ss"))
+                find.condition("createdStamp", EntityCondition.LESS_THAN_EQUAL_TO, ec.l10n.parseTimestamp("2023-06-30 23:59:59", "yyyy-MM-dd HH:mm:ss"))
+
+                EntityFindImpl findImpl = (EntityFindImpl) find
+                EntityDefinition ed = findImpl.getEntityDef()
+                EntityConditionImplBase whereCondition = (EntityConditionImplBase) findImpl.getWhereEntityCondition()
+                List<String> fieldsToSelect = findImpl.getSelectFields()
+                int ftsSize = fieldsToSelect != null ? fieldsToSelect.size() : 0
+                FieldInfo[] fieldInfoArray
+                FieldOrderOptions[] fieldOptionsArray = (FieldOrderOptions[]) null
+                if (ftsSize == 0) {
+                    fieldInfoArray = ed.entityInfo.allFieldInfoArray
+                } else {
+                    fieldInfoArray = new FieldInfo[ftsSize]
+                    fieldOptionsArray = new FieldOrderOptions[ftsSize]
+                    for (int i = 0; i < ftsSize; i++) {
+                        String fieldName = fieldsToSelect.get(i)
+                        FieldInfo fi = ed.getFieldInfo(fieldName)
+                        if (fi == null) {
+                            FieldOrderOptions foo = new FieldOrderOptions(fieldName)
+                            fi = ed.getFieldInfo(foo.fieldName)
+                            fieldInfoArray[i] = fi
+                            fieldOptionsArray[i] = foo
+                        } else {
+                            fieldInfoArray[i] = fi
+                        }
+                    }
+                }
+
+                EntityFindBuilder efb = new EntityFindBuilder(ed, findImpl, whereCondition, fieldInfoArray)
+                if (findImpl.getDistinct()) efb.makeDistinct()
+                efb.makeSqlSelectFields(fieldInfoArray, fieldOptionsArray, "true".equals(findImpl.efi.getDatabaseNode(ed.groupName).attribute("add-unique-as")))
+                efb.makeSqlFromClause()
+                efb.makeWhereClause()
+                efb.makeGroupByClause()
+                efb.makeHavingClause((EntityConditionImplBase) findImpl.getHavingEntityCondition())
+                boolean hasLimitOffset = findImpl.getLimit() != null || findImpl.getOffset() != null
+                ArrayList<String> orderByExpanded = new ArrayList()
+                if (findImpl.getOrderBy() != null) orderByExpanded.addAll(findImpl.getOrderBy())
+                efb.makeOrderByClause(orderByExpanded, hasLimitOffset)
+                if (hasLimitOffset) efb.addLimitOffset(findImpl.getLimit(), findImpl.getOffset())
+                if (findImpl.getForUpdate()) efb.makeForUpdate()
+
+                renderedSql = efb.sqlTopLevel.toString()
+                parametersList = []
+                for (int i = 0; i < efb.parameters.size(); i++) {
+                    parametersList.add(efb.parameters.get(i).value)
+                }
+
+                logger.info("PRE-EXECUTION RENDERED SQL: " + renderedSql)
+                logger.info("PRE-EXECUTION PARAMETERS: " + parametersList)
+
+                resultList = find.list()
+                println "Q1 done, rows: " + resultList.size()
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="get" noun="A1Q02ActivePhysicalProducts">
+        <out-parameters>
+            <parameter name="renderedSql"/>
+            <parameter name="parametersList" type="List"/>
+            <parameter name="resultList" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import org.moqui.entity.EntityCondition
+                import org.moqui.impl.entity.EntityFindImpl
+                import org.moqui.impl.entity.EntityFindBuilder
+                import org.moqui.impl.entity.EntityDefinition
+                import org.moqui.impl.entity.FieldInfo
+                import org.moqui.impl.entity.EntityJavaUtil.FieldOrderOptions
+                import org.moqui.impl.entity.condition.EntityConditionImplBase
+
+                def find = ec.entity.find("mantle.product.Product")
+                def dv = find.makeEntityDynamicView()
+                dv.addMemberEntity("P", "mantle.product.Product", null, null, null)
+                dv.addMemberEntity("PT", "mantle.product.ProductType", "P", false, ["productTypeId":"productTypeId"])
+                dv.addAlias("P", "productId")
+                dv.addAlias("P", "productTypeId")
+                dv.addAlias("P", "internalName")
+                dv.addAlias("PT", "isPhysical")
+
+                find.condition("isPhysical", "Y")
+
+                EntityFindImpl findImpl = (EntityFindImpl) find
+                EntityDefinition ed = findImpl.getEntityDef()
+                EntityConditionImplBase whereCondition = (EntityConditionImplBase) findImpl.getWhereEntityCondition()
+                List<String> fieldsToSelect = findImpl.getSelectFields()
+                int ftsSize = fieldsToSelect != null ? fieldsToSelect.size() : 0
+                FieldInfo[] fieldInfoArray
+                FieldOrderOptions[] fieldOptionsArray = (FieldOrderOptions[]) null
+                if (ftsSize == 0) {
+                    fieldInfoArray = ed.entityInfo.allFieldInfoArray
+                } else {
+                    fieldInfoArray = new FieldInfo[ftsSize]
+                    fieldOptionsArray = new FieldOrderOptions[ftsSize]
+                    for (int i = 0; i < ftsSize; i++) {
+                        String fieldName = fieldsToSelect.get(i)
+                        FieldInfo fi = ed.getFieldInfo(fieldName)
+                        if (fi == null) {
+                            FieldOrderOptions foo = new FieldOrderOptions(fieldName)
+                            fi = ed.getFieldInfo(foo.fieldName)
+                            fieldInfoArray[i] = fi
+                            fieldOptionsArray[i] = foo
+                        } else {
+                            fieldInfoArray[i] = fi
+                        }
+                    }
+                }
+
+                EntityFindBuilder efb = new EntityFindBuilder(ed, findImpl, whereCondition, fieldInfoArray)
+                if (findImpl.getDistinct()) efb.makeDistinct()
+                efb.makeSqlSelectFields(fieldInfoArray, fieldOptionsArray, "true".equals(findImpl.efi.getDatabaseNode(ed.groupName).attribute("add-unique-as")))
+                efb.makeSqlFromClause()
+                efb.makeWhereClause()
+                efb.makeGroupByClause()
+                efb.makeHavingClause((EntityConditionImplBase) findImpl.getHavingEntityCondition())
+                boolean hasLimitOffset = findImpl.getLimit() != null || findImpl.getOffset() != null
+                ArrayList<String> orderByExpanded = new ArrayList()
+                if (findImpl.getOrderBy() != null) orderByExpanded.addAll(findImpl.getOrderBy())
+                efb.makeOrderByClause(orderByExpanded, hasLimitOffset)
+                if (hasLimitOffset) efb.addLimitOffset(findImpl.getLimit(), findImpl.getOffset())
+                if (findImpl.getForUpdate()) efb.makeForUpdate()
+
+                renderedSql = efb.sqlTopLevel.toString()
+                parametersList = []
+                for (int i = 0; i < efb.parameters.size(); i++) {
+                    parametersList.add(efb.parameters.get(i).value)
+                }
+
+                logger.info("PRE-EXECUTION RENDERED SQL: " + renderedSql)
+                logger.info("PRE-EXECUTION PARAMETERS: " + parametersList)
+
+                resultList = find.list()
+            ]]></script>
+        </actions>
+    </service>
+
+    <service verb="get" noun="A1Q03ProductsMissingNetSuiteId">
+        <out-parameters>
+            <parameter name="renderedSql"/>
+            <parameter name="parametersList" type="List"/>
+            <parameter name="resultList" type="List"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+                import org.moqui.entity.EntityCondition
+                import org.moqui.impl.entity.EntityFindImpl
+                import org.moqui.impl.entity.EntityFindBuilder
+                import org.moqui.impl.entity.EntityDefinition
+                import org.moqui.impl.entity.FieldInfo
+                import org.moqui.impl.entity.EntityJavaUtil.FieldOrderOptions
+                import org.moqui.impl.entity.condition.EntityConditionImplBase
+
+                def find = ec.entity.find("mantle.product.Product")
+                def dv = find.makeEntityDynamicView()
+                dv.addMemberEntity("P", "mantle.product.Product", null, null, null)
+                // left join so products without any ERP_ID row still come through, then we check IS NULL
+                dv.addMemberEntity("GI", "mantle.product.feature.GoodIdentification", "P", true,
+                        ["productId":"productId"],
+                        [["field-name":"goodIdentificationTypeId", "value":"ERP_ID"]],
+                        null)
+
+                dv.addAlias("P", "productId")
+                dv.addAlias("P", "internalName")
+                dv.addAlias("P", "productTypeId")
+                dv.addAlias("GI", "idValue")
+
+                find.condition("idValue", EntityCondition.IS_NULL, null)
+
+                EntityFindImpl findImpl = (EntityFindImpl) find
+                EntityDefinition ed = findImpl.getEntityDef()
+                EntityConditionImplBase whereCondition = (EntityConditionImplBase) findImpl.getWhereEntityCondition()
+                List<String> fieldsToSelect = findImpl.getSelectFields()
+                int ftsSize = fieldsToSelect != null ? fieldsToSelect.size() : 0
+                FieldInfo[] fieldInfoArray
+                FieldOrderOptions[] fieldOptionsArray = (FieldOrderOptions[]) null
+                if (ftsSize == 0) {
+                    fieldInfoArray = ed.entityInfo.allFieldInfoArray
+                } else {
+                    fieldInfoArray = new FieldInfo[ftsSize]
+                    fieldOptionsArray = new FieldOrderOptions[ftsSize]
+                    for (int i = 0; i < ftsSize; i++) {
+                        String fieldName = fieldsToSelect.get(i)
+                        FieldInfo fi = ed.getFieldInfo(fieldName)
+                        if (fi == null) {
+                            FieldOrderOptions foo = new FieldOrderOptions(fieldName)
+                            fi = ed.getFieldInfo(foo.fieldName)
+                            fieldInfoArray[i] = fi
+                            fieldOptionsArray[i] = foo
+                        } else {
+                            fieldInfoArray[i] = fi
+                        }
+                    }
+                }
+
+                EntityFindBuilder efb = new EntityFindBuilder(ed, findImpl, whereCondition, fieldInfoArray)
+                if (findImpl.getDistinct()) efb.makeDistinct()
+                efb.makeSqlSelectFields(fieldInfoArray, fieldOptionsArray, "true".equals(findImpl.efi.getDatabaseNode(ed.groupName).attribute("add-unique-as")))
+                efb.makeSqlFromClause()
+                efb.makeWhereClause()
+                efb.makeGroupByClause()
+                efb.makeHavingClause((EntityConditionImplBase) findImpl.getHavingEntityCondition())
+                boolean hasLimitOffset = findImpl.getLimit() != null || findImpl.getOffset() != null
+                ArrayList<String> orderByExpanded = new ArrayList()
+                if (findImpl.getOrderBy() != null) orderByExpanded.addAll(findImpl.getOrderBy())
+                efb.makeOrderByClause(orderByExpanded, hasLimitOffset)
+                if (hasLimitOffset) efb.addLimitOffset(findImpl.getLimit(), findImpl.getOffset())
+                if (findImpl.getForUpdate()) efb.makeForUpdate()
+
+                renderedSql = efb.sqlTopLevel.toString()
+                parametersList = []
+                for (int i = 0; i < efb.parameters.size(); i++) {
+                    parametersList.add(efb.parameters.get(i).value)
+                }
+
+                logger.info("PRE-EXECUTION RENDERED SQL: " + renderedSql)
+                logger.info("PRE-EXECUTION PARAMETERS: " + parametersList)
+
+                resultList = find.list()
+                println "Q3 missing netsuite id count: " + resultList.size()
+            ]]></script>
+        </actions>
+    </service>
+
+</services>
